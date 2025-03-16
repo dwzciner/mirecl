@@ -19,5 +19,7 @@ class Parser(configargparse.ArgParser):
         self.add('--seed', nargs='+', help='Seed', default=[90], type=int)
         self.add('--name', help='Name of experiment', default="oml_regression")
         self.add('--path', help='Path of the dataset', default="../")
+        self.add_argument('--penalty_weight', type=float, default=10000.0)
+        self.add_argument('--penalty_anneal_iters', type=int, default=1500)
 
 

@@ -181,6 +181,11 @@ class MetaLearingClassification(nn.Module):
 
         super(MetaLearingClassification, self).__init__()
         self.penalty = 0
+        self.step = 0
+        self.penalty_weight = (args['penalty_weight']
+                          if self.step >= args['penalty_anneal_iters'] else 1.0)
+
+
         self.update_lr = args['update_lr']
         self.meta_lr = args['meta_lr']
         self.update_step = args['update_step']
@@ -318,9 +323,11 @@ class MetaLearingClassification(nn.Module):
 
     def inner_update(self, x, fast_weights, y):
         adaptation_weight_counter = 0
-
+        scale = torch.tensor(1.).cuda().requires_grad_()
         logits, p = self.net(x, fast_weights)
         loss = F.cross_entropy(logits, y)
+        loss_scale = F.cross_entropy(logits * scale, y)
+        grad_scale = torch.autograd.grad(loss_scale, scale, create_graph=True)[0]
         if fast_weights is None:
             fast_weights = self.net.parameters()
 
@@ -328,7 +335,7 @@ class MetaLearingClassification(nn.Module):
                                    create_graph=True)
         # print(grad)
 
-        self.penalty = torch.sum(grad[0] ** 2)
+        self.penalty = torch.sum(grad_scale ** 2)
 
         new_weights = []
         for p in fast_weights:
@@ -421,12 +428,14 @@ class MetaLearingClassification(nn.Module):
         self.optimizer.zero_grad()
         print(meta_losses)
         meta_loss = meta_losses[-1] + self.penalty
-
+        meta_loss /= self.penalty_weight
         meta_loss.backward()
 
         self.optimizer.step()
         accuracies = np.array(accuracy_meta_set) / len(x_rand[0])
 
+
+        self.step += 1
         return accuracies, meta_losses
 
 # MEC trace
