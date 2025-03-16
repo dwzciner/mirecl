@@ -323,11 +323,16 @@ class MetaLearingClassification(nn.Module):
 
     def inner_update(self, x, fast_weights, y):
         adaptation_weight_counter = 0
-        scale = torch.tensor(1.).cuda().requires_grad_()
+
         logits, p = self.net(x, fast_weights)
         loss = F.cross_entropy(logits, y)
+
+        scale = torch.tensor(1.).cuda().requires_grad_()
         loss_scale = F.cross_entropy(logits * scale, y)
-        grad_scale = torch.autograd.grad(loss_scale, scale, create_graph=True)[0]
+        grad_scale = torch.autograd.grad(loss_scale, [scale], create_graph=True)[0]
+
+        self.penalty = torch.sum(grad_scale ** 2)
+
         if fast_weights is None:
             fast_weights = self.net.parameters()
 
@@ -335,7 +340,7 @@ class MetaLearingClassification(nn.Module):
                                    create_graph=True)
         # print(grad)
 
-        self.penalty = torch.sum(grad_scale ** 2)
+
 
         new_weights = []
         for p in fast_weights:
@@ -417,6 +422,7 @@ class MetaLearingClassification(nn.Module):
             meta_loss, logits = self.meta_loss(x_rand[0], fast_weights, y_rand[0])
 
             meta_losses[k + 1] += meta_loss
+
 
             # Computing accuracy on the meta and traj set for understanding the learning
             with torch.no_grad():
